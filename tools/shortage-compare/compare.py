@@ -14,7 +14,12 @@ from openpyxl.utils import get_column_letter
 
 CODE_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{5,}")
 
+CAT_STOCK_OK = "①库存就够交货"
+CAT_PLANNED = "②库存不够，但已排产"
+CAT_BOTH_SHORT = "③库存和已排产都不够"
+
 NEW_COLS = [
+    "交货分类",
     "成品库存",
     "不良品库存",
     "库存判断",
@@ -255,6 +260,7 @@ def annotate_shortage(shortage: pd.DataFrame, inventory: pd.DataFrame, plan: pd.
         raise ValueError("欠料表里找不到「物料编码」这一列，请确认上传的是欠料表。")
     demand_col = _col(result, "抵扣后的最终欠料", "总欠料")
 
+    cat_list = []
     finished_list = []
     ng_list = []
     judge_list = []
@@ -276,44 +282,43 @@ def annotate_shortage(shortage: pd.DataFrame, inventory: pd.DataFrame, plan: pd.
         gap = max(0.0, demand - finished)
         need_schedule = max(0.0, gap - info["已排未完工"])
 
-        if demand <= 0:
-            judge = "抵扣后无欠料"
+        if demand <= 0 or gap <= 0:
+            category = CAT_STOCK_OK
+            judge = "抵扣后无欠料" if demand <= 0 else "库存足够"
             need_prod = "否"
-            note = f"抵扣后欠料为 0，暂无交货缺口。成品库存 {_fmt_qty(finished)}。"
-        elif not stock_hit:
+            if demand <= 0:
+                note = f"{category}。抵扣后欠料为 0，暂无交货缺口。成品库存 {_fmt_qty(finished)}。"
+            else:
+                note = f"{category}。成品库存 {_fmt_qty(finished)} ≥ 需求 {_fmt_qty(demand)}，现货可交。"
+        elif need_schedule <= 0:
+            category = CAT_PLANNED
+            judge = "不够库存"
+            need_prod = "是"
+            note = (
+                f"{category}。成品库存 {_fmt_qty(finished)}，需求 {_fmt_qty(demand)}，缺口 {_fmt_qty(gap)}。"
+                f"已排产未入库 {_fmt_qty(info['已排未完工'])}，能盖住缺口，不用再开新单，但还要等生产。"
+            )
+        else:
+            category = CAT_BOTH_SHORT
             judge = "不够库存"
             need_prod = "是"
             if info["有排产"]:
                 note = (
-                    f"库存表未匹配到该物料，按 0 库存处理；缺口 {_fmt_qty(gap)}。"
-                    f"已排产 {_fmt_qty(info['已排产数量'])}（未入库 {_fmt_qty(info['已排未完工'])}），"
-                    f"还需排产 {_fmt_qty(need_schedule)}。"
+                    f"{category}。成品库存 {_fmt_qty(finished)} + 已排未入库 {_fmt_qty(info['已排未完工'])}"
+                    f" 仍小于需求 {_fmt_qty(demand)}，还需排产 {_fmt_qty(need_schedule)}。"
                 )
-            else:
-                note = f"库存表和生产计划都未匹配到。缺口 {_fmt_qty(gap)}，还需排产 {_fmt_qty(need_schedule)}。"
-        elif gap <= 0:
-            judge = "库存足够"
-            need_prod = "否"
-            note = f"成品库存 {_fmt_qty(finished)} ≥ 需求 {_fmt_qty(demand)}，库存可交。"
-        else:
-            judge = "不够库存"
-            need_prod = "是"
-            if info["有排产"] and need_schedule <= 0:
+            elif not stock_hit:
                 note = (
-                    f"成品库存 {_fmt_qty(finished)}，需求 {_fmt_qty(demand)}，缺口 {_fmt_qty(gap)}。"
-                    f"已排产 {_fmt_qty(info['已排产数量'])}，覆盖缺口，无需再排产，但还需生产。"
-                )
-            elif info["有排产"]:
-                note = (
-                    f"成品库存 {_fmt_qty(finished)}，需求 {_fmt_qty(demand)}，缺口 {_fmt_qty(gap)}。"
-                    f"已排产 {_fmt_qty(info['已排产数量'])} 仍不够，还需排产 {_fmt_qty(need_schedule)}。"
+                    f"{category}。库存表和生产计划都未匹配到该物料。"
+                    f"缺口 {_fmt_qty(gap)}，还需排产 {_fmt_qty(need_schedule)}。"
                 )
             else:
                 note = (
-                    f"成品库存 {_fmt_qty(finished)}，需求 {_fmt_qty(demand)}，缺口 {_fmt_qty(gap)}。"
+                    f"{category}。成品库存 {_fmt_qty(finished)}，需求 {_fmt_qty(demand)}，缺口 {_fmt_qty(gap)}。"
                     f"生产计划中没有该物料，还需排产 {_fmt_qty(need_schedule)}。"
                 )
 
+        cat_list.append(category)
         finished_list.append(_fmt_qty(finished))
         ng_list.append(_fmt_qty(ng))
         judge_list.append(judge)
@@ -326,6 +331,7 @@ def annotate_shortage(shortage: pd.DataFrame, inventory: pd.DataFrame, plan: pd.
         need_plan_list.append(_fmt_qty(need_schedule))
         note_list.append(note)
 
+    result["交货分类"] = cat_list
     result["成品库存"] = finished_list
     result["不良品库存"] = ng_list
     result["库存判断"] = judge_list
@@ -337,16 +343,21 @@ def annotate_shortage(shortage: pd.DataFrame, inventory: pd.DataFrame, plan: pd.
     result["还需生产"] = need_prod_list
     result["还需排产数量"] = need_plan_list
     result["标注说明"] = note_list
+
+    # 交货分类放在原表列的后面、明细列的最前面
+    original_cols = [c for c in result.columns if c not in NEW_COLS]
+    result = result[original_cols + [c for c in NEW_COLS if c in result.columns]]
     return result
 
 
-def to_excel_bytes(df: pd.DataFrame) -> bytes:
-    buf = io.BytesIO()
-    df.to_excel(buf, index=False, sheet_name="欠料对照结果")
-    buf.seek(0)
-    wb = load_workbook(buf)
-    ws = wb.active
+CAT_FILLS = {
+    CAT_STOCK_OK: PatternFill("solid", fgColor="D8F3DC"),
+    CAT_PLANNED: PatternFill("solid", fgColor="FFE8CC"),
+    CAT_BOTH_SHORT: PatternFill("solid", fgColor="F8D7DA"),
+}
 
+
+def _style_sheet(ws) -> None:
     header_fill = PatternFill("solid", fgColor="1F4E5F")
     header_font = Font(color="FFFFFF", bold=True, name="微软雅黑", size=11)
     thin = Border(
@@ -355,18 +366,8 @@ def to_excel_bytes(df: pd.DataFrame) -> bytes:
         top=Side(style="thin", color="D0D7DE"),
         bottom=Side(style="thin", color="D0D7DE"),
     )
-    fills = {
-        "库存足够": PatternFill("solid", fgColor="D8F3DC"),
-        "抵扣后无欠料": PatternFill("solid", fgColor="E9ECEF"),
-        "不够库存": PatternFill("solid", fgColor="FCE8E6"),
-        "还需排产": PatternFill("solid", fgColor="F8D7DA"),
-        "还需生产": PatternFill("solid", fgColor="FFE8CC"),
-    }
-
     headers = [cell.value for cell in ws[1]]
-    judge_idx = headers.index("库存判断") + 1 if "库存判断" in headers else None
-    prod_idx = headers.index("还需生产") + 1 if "还需生产" in headers else None
-    plan_idx = headers.index("还需排产数量") + 1 if "还需排产数量" in headers else None
+    cat_idx = headers.index("交货分类") + 1 if "交货分类" in headers else None
     note_idx = headers.index("标注说明") + 1 if "标注说明" in headers else None
 
     for cell in ws[1]:
@@ -376,15 +377,8 @@ def to_excel_bytes(df: pd.DataFrame) -> bytes:
         cell.border = thin
 
     for row in ws.iter_rows(min_row=2, max_row=ws.max_row, max_col=ws.max_column):
-        judge = ws.cell(row[0].row, judge_idx).value if judge_idx else ""
-        need_prod = ws.cell(row[0].row, prod_idx).value if prod_idx else ""
-        need_plan = to_num(ws.cell(row[0].row, plan_idx).value if plan_idx else 0)
-        if need_plan > 0:
-            row_fill = fills["还需排产"]
-        elif need_prod == "是":
-            row_fill = fills["还需生产"]
-        else:
-            row_fill = fills.get(str(judge), PatternFill("solid", fgColor="FFFFFF"))
+        category = str(ws.cell(row[0].row, cat_idx).value) if cat_idx else ""
+        row_fill = CAT_FILLS.get(category, PatternFill("solid", fgColor="FFFFFF"))
         for cell in row:
             cell.fill = row_fill
             cell.border = thin
@@ -392,7 +386,8 @@ def to_excel_bytes(df: pd.DataFrame) -> bytes:
             cell.font = Font(name="微软雅黑", size=10)
 
     ws.freeze_panes = "A2"
-    ws.auto_filter.ref = ws.dimensions
+    if ws.max_row >= 1 and ws.max_column >= 1:
+        ws.auto_filter.ref = ws.dimensions
     ws.row_dimensions[1].height = 28
 
     widths = {}
@@ -404,8 +399,28 @@ def to_excel_bytes(df: pd.DataFrame) -> bytes:
         widths[letter] = longest + 2
     if note_idx:
         widths[get_column_letter(note_idx)] = 48
+    if cat_idx:
+        widths[get_column_letter(cat_idx)] = 24
     for letter, width in widths.items():
         ws.column_dimensions[letter].width = width
+
+
+def to_excel_bytes(df: pd.DataFrame) -> bytes:
+    buf = io.BytesIO()
+    sheets = [
+        ("全部", df),
+        ("①库存就够交货", df[df["交货分类"] == CAT_STOCK_OK] if "交货分类" in df.columns else df.iloc[0:0]),
+        ("②库存不够但已排产", df[df["交货分类"] == CAT_PLANNED] if "交货分类" in df.columns else df.iloc[0:0]),
+        ("③库存和已排产都不够", df[df["交货分类"] == CAT_BOTH_SHORT] if "交货分类" in df.columns else df.iloc[0:0]),
+    ]
+    with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+        for name, part in sheets:
+            part.to_excel(writer, index=False, sheet_name=name)
+
+    buf.seek(0)
+    wb = load_workbook(buf)
+    for ws in wb.worksheets:
+        _style_sheet(ws)
 
     out = io.BytesIO()
     wb.save(out)
@@ -430,13 +445,12 @@ def compare_files(shortage_file, inventory_file, plan_file=None) -> tuple[pd.Dat
         raise ValueError("第三份表看起来不是主生产计划（需要有「制令单号」或「投产数量」）。")
 
     result = annotate_shortage(shortage, inventory, plan)
+    cats = result["交货分类"] if "交货分类" in result.columns else pd.Series(dtype=str)
     summary = {
         "欠料行数": int(len(result)),
-        "不够库存": int((result["库存判断"] == "不够库存").sum()),
-        "库存足够": int((result["库存判断"] == "库存足够").sum()),
-        "抵扣后无欠料": int((result["库存判断"] == "抵扣后无欠料").sum()),
-        "还需生产": int((result["还需生产"] == "是").sum()),
-        "还需再排产": int((pd.to_numeric(result["还需排产数量"], errors="coerce").fillna(0) > 0).sum()),
+        CAT_STOCK_OK: int((cats == CAT_STOCK_OK).sum()),
+        CAT_PLANNED: int((cats == CAT_PLANNED).sum()),
+        CAT_BOTH_SHORT: int((cats == CAT_BOTH_SHORT).sum()),
         "文件识别": kinds,
     }
     return result, summary

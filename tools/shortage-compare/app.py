@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import io
+import sys
 import threading
 import webbrowser
 from datetime import datetime
@@ -13,8 +14,16 @@ from flask import Flask, flash, redirect, render_template, request, send_file, u
 
 from compare import compare_files, to_excel_bytes
 
-ROOT = Path(__file__).resolve().parent
-app = Flask(__name__)
+
+def app_dir() -> Path:
+    """程序所在目录：开发时是脚本旁，打包成 exe 后是解压出来的临时目录。"""
+    if getattr(sys, "frozen", False):
+        return Path(sys._MEIPASS)
+    return Path(__file__).resolve().parent
+
+
+ROOT = app_dir()
+app = Flask(__name__, template_folder=str(ROOT / "templates"))
 app.secret_key = "lu-shortage-compare-local"
 app.config["MAX_CONTENT_LENGTH"] = 40 * 1024 * 1024
 
@@ -59,8 +68,8 @@ def do_compare():
             "物料名称K3",
             "总欠料",
             "抵扣后的最终欠料",
+            "交货分类",
             "成品库存",
-            "库存判断",
             "库存缺口",
             "已排产数量",
             "还需生产",
@@ -89,11 +98,15 @@ def download():
 
 
 def main():
-    url = "http://127.0.0.1:5000"
+    port = 5000
+    url = f"http://127.0.0.1:{port}"
     threading.Timer(0.8, lambda: webbrowser.open(url)).start()
-    print(f"小程序已启动，浏览器将打开：{url}")
-    print("用完后，在这个窗口按 Ctrl+C 可以关闭。")
-    app.run(host="127.0.0.1", port=5000, debug=False)
+    print("=" * 46)
+    print("  欠料对照小程序已启动")
+    print(f"  浏览器将打开：{url}")
+    print("  用完后，直接关掉这个黑窗口即可。")
+    print("=" * 46)
+    app.run(host="127.0.0.1", port=port, debug=False, use_reloader=False)
 
 
 if __name__ == "__main__":
