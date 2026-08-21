@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>出货报告生成工具</title>
+  <style>
+    :root {
+      --bg: #f3f0ea;
+      --card: #fffdf8;
+      --ink: #1f2a24;
+      --muted: #5c6b63;
+      --line: #d7d0c4;
+      --accent: #0f6b4c;
+      --ok: #1b7f4a;
+      --bad: #b33b2c;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(1200px 500px at 10% -10%, #e7efe8 0%, transparent 55%),
+        radial-gradient(900px 400px at 100% 0%, #f7e7d8 0%, transparent 50%),
+        var(--bg);
+      min-height: 100vh;
+    }
+    .wrap { max-width: 980px; margin: 0 auto; padding: 28px 18px 60px; }
+    h1 { font-size: 1.6rem; margin: 0 0 6px; }
+    .sub { color: var(--muted); margin-bottom: 22px; line-height: 1.5; }
+    .panel {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 18px;
+      margin-bottom: 16px;
+      box-shadow: 0 10px 30px rgba(40, 30, 10, 0.04);
+    }
+    .panel h2 { font-size: 1.05rem; margin: 0 0 12px; }
+    .file-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    .file-name { color: var(--muted); font-size: 0.92rem; }
+    label.row {
+      display: grid;
+      grid-template-columns: 28px 1.2fr 1fr 110px 110px 1fr;
+      gap: 10px;
+      align-items: center;
+      padding: 10px 8px;
+      border-top: 1px dashed var(--line);
+    }
+    label.row:first-of-type { border-top: none; }
+    .head {
+      display: grid;
+      grid-template-columns: 28px 1.2fr 1fr 110px 110px 1fr;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 0.85rem;
+      padding: 0 8px 8px;
+    }
+    input[type="number"] {
+      width: 100%;
+      padding: 7px 8px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      font-size: 0.95rem;
+    }
+    input[type="file"] { display: none; }
+    .part { font-weight: 600; }
+    .name { color: var(--muted); font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tag {
+      display: inline-block;
+      font-size: 0.78rem;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: #e8f5ef;
+      color: var(--ok);
+    }
+    .tag.missing { background: #fdeceb; color: var(--bad); }
+    .aql { font-size: 0.82rem; color: var(--muted); line-height: 1.35; }
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+    button {
+      border: none;
+      border-radius: 10px;
+      padding: 11px 18px;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+    button.primary { background: var(--accent); color: #fff; }
+    button.primary:disabled { opacity: 0.5; cursor: not-allowed; }
+    button.ghost { background: #efeae2; color: var(--ink); }
+    .msg { margin-top: 12px; white-space: pre-wrap; line-height: 1.5; }
+    .msg.ok { color: var(--ok); }
+    .msg.err { color: var(--bad); }
+    .hint { font-size: 0.88rem; color: var(--muted); margin-top: 8px; }
+    @media (max-width: 820px) {
+      .head { display: none; }
+      label.row { grid-template-columns: 28px 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>出货报告生成工具</h1>
+    <p class="sub">
+      自己选择采购订单和出货报告模板 → 勾选料号、填数量 → 生成时再选保存位置。<br />
+      尺寸会自动生成；样字 / 样本数 / 允收拒收按发货数量查表。
+    </p>
+
+    <div class="panel">
+      <h2>1. 选择采购订单（选 1 个 PDF）</h2>
+      <div class="file-row">
+        <button type="button" class="ghost" id="btnOrder">选择采购订单…</button>
+        <span class="file-name" id="orderName">尚未选择</span>
+      </div>
+      <input type="file" id="orderFile" accept=".pdf,application/pdf" />
+      <p class="hint" id="orderHint"></p>
+    </div>
+
+    <div class="panel">
+      <h2>2. 选择出货报告模板（可一次多选）</h2>
+      <div class="file-row">
+        <button type="button" class="ghost" id="btnTpl" disabled>选择模板…</button>
+        <span class="file-name" id="tplName">请先选择采购订单</span>
+      </div>
+      <input type="file" id="tplFiles" accept=".pdf,application/pdf" multiple />
+      <p class="hint">可按住 Ctrl 一次选多个料号的模板；工具会按料号自动匹配。</p>
+    </div>
+
+    <div class="panel">
+      <h2>3. 勾选物料并填写数量</h2>
+      <div class="head">
+        <div></div><div>料号</div><div>品名</div><div>订单数量</div><div>发货数量</div><div>匹配 / 抽检</div>
+      </div>
+      <div id="itemList"></div>
+      <p class="hint">订单数量可改。发货数量按本次实际填写。只有「已匹配模板」的才能勾选生成。</p>
+    </div>
+
+    <div class="panel">
+      <h2>4. 生成</h2>
+      <div class="actions">
+        <button class="primary" id="btnGen" disabled>生成出货报告</button>
+        <button class="ghost" id="btnReset">清空重来</button>
+      </div>
+      <p class="hint">点击生成后，会弹出窗口让你选择保存文件夹。</p>
+      <div class="msg" id="msg"></div>
+    </div>
+  </div>
+
+  <script>
+    let current = { po_no: null, items: [] };
+
+    const orderFile = document.getElementById('orderFile');
+    const tplFiles = document.getElementById('tplFiles');
+    const orderName = document.getElementById('orderName');
+    const orderHint = document.getElementById('orderHint');
+    const tplName = document.getElementById('tplName');
+    const btnTpl = document.getElementById('btnTpl');
+    const btnGen = document.getElementById('btnGen');
+    const itemList = document.getElementById('itemList');
+    const msg = document.getElementById('msg');
+
+    document.getElementById('btnOrder').onclick = () => orderFile.click();
+    document.getElementById('btnTpl').onclick = () => tplFiles.click();
+
+    function esc(s) {
+      return String(s ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function updateGenBtn() {
+      const hasMatch = (current.items || []).some(it => it.has_template);
+      btnGen.disabled = !hasMatch;
+    }
+
+    function renderItems() {
+      itemList.innerHTML = '';
+      (current.items || []).forEach((it, idx) => {
+        const lab = document.createElement('label');
+        lab.className = 'row';
+        lab.innerHTML = `
+          <input class="c" type="checkbox" data-idx="${idx}" ${it.has_template ? 'checked' : ''} ${it.has_template ? '' : 'disabled'} />
+          <div class="part">${esc(it.part_no)}</div>
+          <div class="name" title="${esc(it.name || '')}">${esc(it.name || '-')}</div>
+          <input class="order" type="number" min="1" value="${Number(it.qty) || ''}" data-idx="${idx}" />
+          <input class="deliver" type="number" min="2" value="" placeholder="必填" data-idx="${idx}" />
+          <div class="aql" data-aql="${idx}">
+            ${it.has_template
+              ? `<span class="tag">已匹配</span> ${esc(it.template || '')}`
+              : '<span class="tag missing">缺模板</span>'}
+            <div class="aql-text"></div>
+          </div>
+        `;
+        itemList.appendChild(lab);
+      });
+      itemList.querySelectorAll('.deliver').forEach(inp => {
+        inp.addEventListener('input', () => previewAql(inp));
+        previewAql(inp);
+      });
+      updateGenBtn();
+    }
+
+    async function previewAql(inp) {
+      const idx = inp.dataset.idx;
+      const box = itemList.querySelector(`[data-aql="${idx}"] .aql-text`);
+      const qty = parseInt(inp.value, 10);
+      if (!qty || qty < 2) {
+        box.textContent = '请填写发货数量';
+        return;
+      }
+      const res = await fetch('/api/preview-aql', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ deliver_qty: qty })
+      });
+      const data = await res.json();
+      if (!data.ok) {
+        box.textContent = data.error || '无法查表';
+        return;
+      }
+      box.textContent = `样字 ${data.letter}　样本 ${data.sample_size}　MAJ ${data.maj_ac}/${data.maj_re}　MIN ${data.min_ac}/${data.min_re}`;
+    }
+
+    orderFile.addEventListener('change', async () => {
+      const file = orderFile.files[0];
+      if (!file) return;
+      msg.textContent = '正在读取采购订单…';
+      msg.className = 'msg';
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch('/api/upload-order', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!data.ok) {
+        msg.textContent = data.error || '读取失败';
+        msg.className = 'msg err';
+        return;
+      }
+      current.po_no = data.po_no;
+      current.items = data.items || [];
+      orderName.textContent = data.po_name + '（订单号 ' + data.po_no + '，' + current.items.length + ' 种物料）';
+      orderHint.textContent = '订单已读取。接下来选择各料号的出货报告模板。';
+      btnTpl.disabled = false;
+      tplName.textContent = '尚未选择模板';
+      renderItems();
+      msg.textContent = '';
+      orderFile.value = '';
+    });
+
+    tplFiles.addEventListener('change', async () => {
+      const files = tplFiles.files;
+      if (!files || !files.length) return;
+      msg.textContent = '正在匹配模板…';
+      msg.className = 'msg';
+      const fd = new FormData();
+      for (const f of files) fd.append('files', f);
+      const res = await fetch('/api/upload-templates', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!data.ok) {
+        msg.textContent = data.error || '上传失败';
+        msg.className = 'msg err';
+        return;
+      }
+      current.items = data.items || [];
+      tplName.textContent = '已上传 ' + data.uploaded + ' 个，成功匹配 ' + data.matched + ' 个料号';
+      renderItems();
+      let text = '';
+      if (data.unmatched_files && data.unmatched_files.length) {
+        text = '有文件未能自动匹配到订单料号：\n' + data.unmatched_files.join('\n');
+        msg.className = 'msg err';
+      } else {
+        text = '模板匹配完成。可以勾选物料并生成。';
+        msg.className = 'msg ok';
+      }
+      msg.textContent = text;
+      tplFiles.value = '';
+    });
+
+    document.getElementById('btnReset').onclick = async () => {
+      const res = await fetch('/api/reset', { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.ok === false) {
+        msg.textContent = data.error || '清空失败（可能正在生成）';
+        msg.className = 'msg err';
+        return;
+      }
+      current = { po_no: null, items: [] };
+      orderName.textContent = '尚未选择';
+      orderHint.textContent = '';
+      tplName.textContent = '请先选择采购订单';
+      btnTpl.disabled = true;
+      itemList.innerHTML = '';
+      updateGenBtn();
+      msg.textContent = '已清空，请重新选择文件。';
+      msg.className = 'msg';
+    };
+
+    document.getElementById('btnGen').onclick = async () => {
+      const items = [];
+      let missingDeliver = false;
+      itemList.querySelectorAll('input.c:checked').forEach(chk => {
+        const idx = chk.dataset.idx;
+        const orderInp = itemList.querySelector(`input.order[data-idx="${idx}"]`);
+        const deliverInp = itemList.querySelector(`input.deliver[data-idx="${idx}"]`);
+        const it = current.items[idx];
+        const deliver_qty = parseInt(deliverInp.value, 10);
+        if (!deliver_qty || deliver_qty < 2) {
+          missingDeliver = true;
+          return;
+        }
+        items.push({
+          part_no: it.part_no,
+          order_qty: parseInt(orderInp.value, 10),
+          deliver_qty,
+        });
+      });
+      if (missingDeliver) {
+        msg.textContent = '请为勾选的物料填写发货数量（至少为 2）。';
+        msg.className = 'msg err';
+        return;
+      }
+      if (!items.length) {
+        msg.textContent = '请先勾选至少一种已匹配模板的物料。';
+        msg.className = 'msg err';
+        return;
+      }
+      msg.textContent = '请在弹出的窗口中选择保存文件夹…\n（若没看到弹窗，请看看是否被挡在其他窗口后面）';
+      msg.className = 'msg';
+      btnGen.disabled = true;
+      try {
+        const res = await fetch('/api/generate', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ po_no: current.po_no, items })
+        });
+        const data = await res.json();
+        let text = '';
+        if (data.results && data.results.length) {
+          text += '生成成功 ' + data.results.length + ' 份，保存在：\n' + data.output_dir + '\n\n';
+          data.results.forEach(r => {
+            text += '✓ ' + r.filename
+              + '　样字' + r.aql.letter
+              + '　样本' + r.aql.sample_size
+              + '　出货日' + r.ship_date
+              + '　检验日' + r.test_date + '\n';
+          });
+          msg.className = 'msg ok';
+        } else {
+          msg.className = 'msg err';
+          text = (data.error ? data.error + '\n' : '') + '没有成功生成文件。\n';
+        }
+        if (data.errors && data.errors.length) {
+          text += '\n失败：\n';
+          data.errors.forEach(e => { text += '✗ ' + e.part_no + '：' + e.error + '\n'; });
+        }
+        msg.textContent = text;
+      } catch (e) {
+        msg.textContent = '生成出错：' + e;
+        msg.className = 'msg err';
+      }
+      updateGenBtn();
+    };
+  </script>
+</body>
+</html>

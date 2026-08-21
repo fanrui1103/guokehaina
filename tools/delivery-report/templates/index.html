@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>送货单出货报告工具</title>
+  <style>
+    :root {
+      --bg: #f3f0ea;
+      --card: #fffdf8;
+      --ink: #1f2a24;
+      --muted: #5c6b63;
+      --line: #d7d0c4;
+      --accent: #0f6b4c;
+      --ok: #1b7f4a;
+      --bad: #b33b2c;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(1200px 500px at 10% -10%, #e7efe8 0%, transparent 55%),
+        radial-gradient(900px 400px at 100% 0%, #f7e7d8 0%, transparent 50%),
+        var(--bg);
+      min-height: 100vh;
+    }
+    .wrap { max-width: 1080px; margin: 0 auto; padding: 28px 18px 60px; }
+    h1 { font-size: 1.6rem; margin: 0 0 6px; }
+    .sub { color: var(--muted); margin-bottom: 22px; line-height: 1.5; }
+    .panel {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 18px;
+      margin-bottom: 16px;
+      box-shadow: 0 10px 30px rgba(40, 30, 10, 0.04);
+    }
+    .panel h2 { font-size: 1.05rem; margin: 0 0 12px; }
+    .file-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    .file-name { color: var(--muted); font-size: 0.92rem; }
+    .toolbar {
+      display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+      margin-bottom: 10px;
+    }
+    .toolbar input[type="search"] {
+      flex: 1; min-width: 180px;
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      font-size: 0.95rem;
+    }
+    .list-wrap {
+      max-height: 420px;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+    }
+    label.row {
+      display: grid;
+      grid-template-columns: 28px 1.3fr 1fr 100px 1.1fr 1.2fr;
+      gap: 10px;
+      align-items: center;
+      padding: 10px 8px;
+      border-top: 1px dashed var(--line);
+    }
+    label.row:first-of-type { border-top: none; }
+    .head {
+      display: grid;
+      grid-template-columns: 28px 1.3fr 1fr 100px 1.1fr 1.2fr;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 0.85rem;
+      padding: 8px 8px 8px;
+      position: sticky; top: 0;
+      background: #fffdf8;
+      border-bottom: 1px solid var(--line);
+      z-index: 1;
+    }
+    input[type="file"] { display: none; }
+    .part { font-weight: 600; font-size: 0.92rem; word-break: break-all; }
+    .name { color: var(--muted); font-size: 0.88rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .mono { font-variant-numeric: tabular-nums; }
+    .tag {
+      display: inline-block;
+      font-size: 0.78rem;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: #e8f5ef;
+      color: var(--ok);
+    }
+    .tag.missing { background: #fdeceb; color: var(--bad); }
+    .match { font-size: 0.82rem; color: var(--muted); line-height: 1.35; }
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+    button {
+      border: none;
+      border-radius: 10px;
+      padding: 11px 18px;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+    button.primary { background: var(--accent); color: #fff; }
+    button.primary:disabled { opacity: 0.5; cursor: not-allowed; }
+    button.ghost { background: #efeae2; color: var(--ink); }
+    .msg { margin-top: 12px; white-space: pre-wrap; line-height: 1.5; }
+    .msg.ok { color: var(--ok); }
+    .msg.err { color: var(--bad); }
+    .hint { font-size: 0.88rem; color: var(--muted); margin-top: 8px; }
+    .stats { font-size: 0.9rem; color: var(--muted); }
+    @media (max-width: 900px) {
+      .head { display: none; }
+      label.row { grid-template-columns: 28px 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>送货单出货报告工具</h1>
+    <p class="sub">
+      选择送货单 Excel → 选择各物料编码的 PDF 模板 → 生成报告。<br />
+      只读取「数据状态 = 已发货」的行。自动改：日期、订单编号、订单数量=交货数量、尺寸 Sample1～10（公差内小幅波动）。其它保持模板原样。
+    </p>
+
+    <div class="panel">
+      <h2>1. 选择送货单明细（Excel）</h2>
+      <div class="file-row">
+        <button type="button" class="ghost" id="btnExcel">选择 Excel…</button>
+        <span class="file-name" id="excelName">尚未选择</span>
+      </div>
+      <input type="file" id="excelFile" accept=".xlsx,.xlsm,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
+      <p class="hint" id="excelHint"></p>
+    </div>
+
+    <div class="panel">
+      <h2>2. 选择出货报告模板（可一次多选）</h2>
+      <div class="file-row">
+        <button type="button" class="ghost" id="btnTpl" disabled>选择模板…</button>
+        <span class="file-name" id="tplName">请先选择 Excel</span>
+      </div>
+      <input type="file" id="tplFiles" accept=".pdf,application/pdf" multiple />
+      <p class="hint">模板文件名必须带物料编码（如 3228000410101.pdf），只按文件名匹配，不看 PDF 里旧的客户货号。可按住 Ctrl 一次选多个。</p>
+    </div>
+
+    <div class="panel">
+      <h2>3. 核对物料并勾选要生成的</h2>
+      <div class="toolbar">
+        <input type="search" id="filter" placeholder="搜索物料编码 / 品名 / 订单号…" disabled />
+        <button type="button" class="ghost" id="btnSelMatched" disabled>全选已匹配</button>
+        <button type="button" class="ghost" id="btnClearSel" disabled>取消勾选</button>
+        <span class="stats" id="stats"></span>
+      </div>
+      <div class="list-wrap">
+        <div class="head">
+          <div></div><div>物料编码</div><div>品名</div><div>数量合计</div><div>采购订单号</div><div>模板匹配</div>
+        </div>
+        <div id="itemList"></div>
+      </div>
+      <p class="hint">仅统计已发货行的「发货数量」合计；订单号取该编码已发货第一行的「采购订单号」。生成前请核对模板文件名。</p>
+    </div>
+
+    <div class="panel">
+      <h2>4. 生成</h2>
+      <div class="actions">
+        <button class="primary" id="btnGen" disabled>生成出货报告</button>
+        <button class="ghost" id="btnReset">清空重来</button>
+      </div>
+      <p class="hint">点击生成后，会弹出窗口让你选择保存文件夹。</p>
+      <div class="msg" id="msg"></div>
+    </div>
+  </div>
+
+  <script>
+    let current = { items: [] };
+
+    const excelFile = document.getElementById('excelFile');
+    const tplFiles = document.getElementById('tplFiles');
+    const excelName = document.getElementById('excelName');
+    const excelHint = document.getElementById('excelHint');
+    const tplName = document.getElementById('tplName');
+    const btnTpl = document.getElementById('btnTpl');
+    const btnGen = document.getElementById('btnGen');
+    const itemList = document.getElementById('itemList');
+    const filter = document.getElementById('filter');
+    const stats = document.getElementById('stats');
+    const msg = document.getElementById('msg');
+    const btnSelMatched = document.getElementById('btnSelMatched');
+    const btnClearSel = document.getElementById('btnClearSel');
+
+    document.getElementById('btnExcel').onclick = () => excelFile.click();
+    document.getElementById('btnTpl').onclick = () => tplFiles.click();
+
+    function esc(s) {
+      return String(s ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function updateGenBtn() {
+      const checked = itemList.querySelectorAll('input.c:checked').length;
+      btnGen.disabled = checked === 0;
+      const matched = (current.items || []).filter(it => it.has_template).length;
+      const total = (current.items || []).length;
+      stats.textContent = total
+        ? `共 ${total} 种　已匹配模板 ${matched}　已勾选 ${checked}`
+        : '';
+    }
+
+    function visibleItems() {
+      const q = (filter.value || '').trim().toLowerCase();
+      return (current.items || []).map((it, idx) => ({ it, idx })).filter(({ it }) => {
+        if (!q) return true;
+        const blob = [it.part_no, it.name, it.po_no, it.template].join(' ').toLowerCase();
+        return blob.includes(q);
+      });
+    }
+
+    function renderItems() {
+      itemList.innerHTML = '';
+      visibleItems().forEach(({ it, idx }) => {
+        const lab = document.createElement('label');
+        lab.className = 'row';
+        lab.innerHTML = `
+          <input class="c" type="checkbox" data-idx="${idx}" ${it.has_template ? 'checked' : ''} ${it.has_template ? '' : 'disabled'} />
+          <div class="part">${esc(it.part_no)}</div>
+          <div class="name" title="${esc(it.name || '')}">${esc(it.name || '-')}</div>
+          <div class="mono">${esc(it.qty)}</div>
+          <div class="mono">${esc(it.po_no || '-')}</div>
+          <div class="match">
+            ${it.has_template
+              ? `<span class="tag">已匹配</span> ${esc(it.template || '')}`
+              : '<span class="tag missing">缺模板</span>'}
+          </div>
+        `;
+        itemList.appendChild(lab);
+      });
+      itemList.querySelectorAll('input.c').forEach(chk => {
+        chk.addEventListener('change', updateGenBtn);
+      });
+      updateGenBtn();
+    }
+
+    function setReady(hasExcel) {
+      btnTpl.disabled = !hasExcel;
+      filter.disabled = !hasExcel;
+      btnSelMatched.disabled = !hasExcel;
+      btnClearSel.disabled = !hasExcel;
+    }
+
+    excelFile.addEventListener('change', async () => {
+      const file = excelFile.files[0];
+      if (!file) return;
+      msg.textContent = '正在读取送货单 Excel…';
+      msg.className = 'msg';
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch('/api/upload-excel', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!data.ok) {
+        msg.textContent = data.error || '读取失败';
+        msg.className = 'msg err';
+        return;
+      }
+      current.items = data.items || [];
+      excelName.textContent = data.excel_name + '（已发货 ' + data.item_count + ' 种物料编码）';
+      excelHint.textContent = '已过滤：只保留「数据状态=已发货」。接下来选择各物料编码对应的出货报告模板。';
+      setReady(true);
+      tplName.textContent = '尚未选择模板';
+      filter.value = '';
+      renderItems();
+      msg.textContent = '';
+      excelFile.value = '';
+    });
+
+    tplFiles.addEventListener('change', async () => {
+      const files = tplFiles.files;
+      if (!files || !files.length) return;
+      msg.textContent = '正在匹配模板…';
+      msg.className = 'msg';
+      const fd = new FormData();
+      for (const f of files) fd.append('files', f);
+      const res = await fetch('/api/upload-templates', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!data.ok) {
+        msg.textContent = data.error || '上传失败';
+        msg.className = 'msg err';
+        return;
+      }
+      current.items = data.items || [];
+      tplName.textContent = '已选 ' + data.uploaded + ' 个模板，成功匹配 ' + data.matched + ' 个物料编码';
+      renderItems();
+      let text = '';
+      if (data.unmatched_files && data.unmatched_files.length) {
+        text = '有模板文件未能自动匹配到表格里的物料编码：\n' + data.unmatched_files.join('\n');
+        text += '\n请核对文件名是否含正确物料编码。';
+        msg.className = 'msg err';
+      } else {
+        text = '模板匹配完成。请核对上表「已匹配」的文件名，再生成。';
+        msg.className = 'msg ok';
+      }
+      msg.textContent = text;
+      tplFiles.value = '';
+    });
+
+    filter.addEventListener('input', renderItems);
+
+    btnSelMatched.onclick = () => {
+      itemList.querySelectorAll('input.c:not(:disabled)').forEach(c => { c.checked = true; });
+      updateGenBtn();
+    };
+    btnClearSel.onclick = () => {
+      itemList.querySelectorAll('input.c').forEach(c => { c.checked = false; });
+      updateGenBtn();
+    };
+
+    document.getElementById('btnReset').onclick = async () => {
+      const res = await fetch('/api/reset', { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.ok === false) {
+        msg.textContent = data.error || '清空失败（可能正在生成）';
+        msg.className = 'msg err';
+        return;
+      }
+      current = { items: [] };
+      excelName.textContent = '尚未选择';
+      excelHint.textContent = '';
+      tplName.textContent = '请先选择 Excel';
+      setReady(false);
+      filter.value = '';
+      itemList.innerHTML = '';
+      updateGenBtn();
+      msg.textContent = '已清空，请重新选择文件。';
+      msg.className = 'msg';
+    };
+
+    document.getElementById('btnGen').onclick = async () => {
+      const items = [];
+      itemList.querySelectorAll('input.c:checked').forEach(chk => {
+        const idx = Number(chk.dataset.idx);
+        const it = current.items[idx];
+        if (!it) return;
+        items.push({
+          part_no: it.part_no,
+          qty: it.qty,
+          po_no: it.po_no,
+        });
+      });
+      if (!items.length) {
+        msg.textContent = '请先勾选至少一种已匹配模板的物料。';
+        msg.className = 'msg err';
+        return;
+      }
+      msg.textContent = '请在弹出的窗口中选择保存文件夹…\n（若没看到弹窗，请看看是否被挡在其他窗口后面）';
+      msg.className = 'msg';
+      btnGen.disabled = true;
+      try {
+        const res = await fetch('/api/generate', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ items })
+        });
+        const data = await res.json();
+        let text = '';
+        if (data.results && data.results.length) {
+          text += '生成成功 ' + data.results.length + ' 份，保存在：\n' + data.output_dir + '\n\n';
+          data.results.forEach(r => {
+            text += '✓ ' + r.filename
+              + '　数量' + r.qty
+              + '　订单' + (r.po_no || '-')
+              + '　日期' + r.ship_date + '\n';
+          });
+          msg.className = 'msg ok';
+        } else {
+          msg.className = 'msg err';
+          text = (data.error ? data.error + '\n' : '') + '没有成功生成文件。\n';
+        }
+        if (data.errors && data.errors.length) {
+          text += '\n失败：\n';
+          data.errors.forEach(e => { text += '✗ ' + e.part_no + '：' + e.error + '\n'; });
+        }
+        msg.textContent = text;
+      } catch (e) {
+        msg.textContent = '生成出错：' + e;
+        msg.className = 'msg err';
+      }
+      updateGenBtn();
+    };
+  </script>
+</body>
+</html>

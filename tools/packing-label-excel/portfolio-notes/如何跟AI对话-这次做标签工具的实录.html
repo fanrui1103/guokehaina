@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>如何跟 AI 对话：这次做标签工具的实录</title>
+  <style>
+    :root {
+      --bg: #f7f4ee;
+      --paper: #fffdf8;
+      --ink: #1c1a16;
+      --muted: #5c574e;
+      --line: #e6dfd2;
+      --you: #1f4e3d;
+      --you-bg: #eaf3ee;
+      --ai: #3d4a6b;
+      --ai-bg: #eef1f7;
+      --tip: #8a5a12;
+      --tip-bg: #fff4e0;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+      line-height: 1.7;
+    }
+    .wrap {
+      max-width: 820px;
+      margin: 0 auto;
+      padding: 40px 20px 80px;
+    }
+    header {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      padding: 36px 32px;
+      margin-bottom: 28px;
+    }
+    header p.kicker {
+      margin: 0 0 8px;
+      letter-spacing: 0.18em;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    h1 {
+      margin: 0 0 12px;
+      font-size: 28px;
+      font-weight: 700;
+      line-height: 1.35;
+    }
+    header .lead { margin: 0; color: var(--muted); }
+    h2 {
+      font-size: 20px;
+      margin: 36px 0 12px;
+      padding-top: 8px;
+    }
+    h3 { font-size: 16px; margin: 22px 0 8px; }
+    p, li { font-size: 15px; }
+    .card {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      padding: 22px 24px;
+      margin: 14px 0;
+    }
+    .methods { display: grid; gap: 12px; }
+    .method {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      padding: 16px 18px;
+    }
+    .method b { display: block; margin-bottom: 4px; }
+    .msg {
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin: 12px 0;
+    }
+    .msg .who {
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      margin-bottom: 6px;
+    }
+    .you { background: var(--you-bg); border-left: 4px solid var(--you); }
+    .you .who { color: var(--you); }
+    .ai { background: var(--ai-bg); border-left: 4px solid var(--ai); }
+    .ai .who { color: var(--ai); }
+    .tip {
+      background: var(--tip-bg);
+      border-left: 4px solid var(--tip);
+      padding: 12px 16px;
+      margin: 10px 0 18px;
+      color: #5a3b0a;
+      font-size: 14px;
+    }
+    .tip::before { content: "可以学的点："; font-weight: 700; }
+    ol.steps { padding-left: 22px; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--paper);
+      font-size: 14px;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: #f3eee4; }
+    footer {
+      margin-top: 40px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    @media print {
+      body { background: #fff; }
+      .wrap { padding: 0; max-width: none; }
+      header, .card, .method, .msg { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <p class="kicker">对话实录 · 2026年8月21日</p>
+      <h1>如何跟 AI 对话：<br />这次「益佳通标签表工具」是怎么做成的</h1>
+      <p class="lead">
+        这份材料不是教编程，而是还原一次真实对话：一个人不会写代码，怎样把一件业务上的事讲清楚，让 AI 做成能给同事用的小工具。
+      </p>
+    </header>
+
+    <div class="card">
+      <p><b>这件事最后做成了什么</b></p>
+      <p>同事出货时要填一张带公式的 Excel，用来生成内箱、外箱、卡板三种二维码。以前要手填、手拖公式，尾箱和外箱很容易算错。</p>
+      <p>现在：打开一个小窗口，填料号、日期、总件数、每内箱件数等几项，点生成，得到一张跟原来模板同结构的 Excel。原来怎么打印还怎么打印。</p>
+    </div>
+
+    <h2>一、可以马上照着学的 6 个方法</h2>
+    <div class="methods">
+      <div class="method">
+        <b>1. 先让 AI 读现成材料，再开口问你</b>
+        不要一上来就说「帮我做一个系统」。这次第一句是：文件夹里已经有表格，你先读，告诉我你看懂了什么，然后向我提问，直到我们达成共识。
+      </div>
+      <div class="method">
+        <b>2. 达成共识之前，不要急着让它动手</b>
+        装箱规则没说清就生成，一定会错。先对齐「怎么装、余数怎么办、输出长什么样」，再让它写程序。
+      </div>
+      <div class="method">
+        <b>3. 用真实数字举一个完整例子</b>
+        「一共 123 件，每内箱 2 件」比「按规则装箱」有用得多。AI 可以拿这个例子对答案，你也可以立刻看出它有没有算错。
+      </div>
+      <div class="method">
+        <b>4. AI 猜错时，不要含糊地说「不对」</b>
+        直接讲实际怎么装：内箱数量要人填、4 个内箱一个外箱、卡板二维码最多装 13 个内箱的信息。把「为什么你会猜成 13 件」也说出来。
+      </div>
+      <div class="method">
+        <b>5. 做完先自己试，再让它查容易出错的地方</b>
+        试过没问题之后，再问：改料号，二维码会变吗？打包后会不会打不开？这比一开始就追求完美更稳。
+      </div>
+      <div class="method">
+        <b>6. 把使用对象说清楚</b>
+        「给我的同事做，他要在自己电脑上打开」决定了做成双击就能用的程序，而不是只有你会操作的一堆代码。
+      </div>
+    </div>
+
+    <h2>二、对话实录</h2>
+    <p>下面按真实顺序写。AI 当时还读了表格、写了程序、打了包，那些技术过程这里只保留同事需要知道的结果。</p>
+
+    <h3>1. 开头：先读表，再提问，直到共识</h3>
+    <div class="msg you">
+      <div class="who">人这么说</div>
+      我要给我的同事做一个小程序，帮他整理数据处理表格。他现在已经有一个有公式的 Excel 表格模板，你先读文件夹里的表格，告诉我你知道了什么。然后向我提问，直到我们两个达成共识。
+    </div>
+    <div class="msg ai">
+      <div class="who">AI 做了什么</div>
+      先打开《益佳通标签模板》，用白话讲它看懂的内容：这是一张标签生成表，不是普通进销存表；有内箱、外箱、卡板三层；样本是 123 条同一批货；公式会把字段拼成二维码。然后指出一个对不上的地方：公式按 13 个内箱切卡板码，格子里却写着「一个卡板 54 件」。最后问：小程序最想替同事省掉哪一步？
+    </div>
+    <p class="tip">第一句话里其实下了三个指令：做什么、先读什么、没问清之前不要开做。AI 就不容易一上来乱猜。</p>
+
+    <h3>2. 对准「到底要替人省哪一步」</h3>
+    <div class="msg you">
+      <div class="who">人这么选</div>
+      只填几项（供应商、料号、日期、总数量、怎么装箱），自动生成整张表和三种二维码。
+    </div>
+    <div class="msg ai">
+      <div class="who">AI 接着问</div>
+      装箱规则是固定的，还是每次都要改？并列出它从表里看出来的两种说法（4 内箱=1 外箱，卡板 13 箱还是 54 件），请人来拍板。
+    </div>
+    <div class="msg you">
+      <div class="who">人这么选</div>
+      都不对，我来讲清楚实际怎么装、余数怎么办。
+    </div>
+    <p class="tip">选项里专门留了「让我自己说」。业务规则一复杂，就不要被迫选一个近似答案。</p>
+
+    <h3>3. 用自己的话讲规则，并给一个真例子</h3>
+    <div class="msg you">
+      <div class="who">人这么说</div>
+      1. 内箱每次装的数量不一样，要由使用者输入再填入表格。<br />
+      2. 4 个内箱装成一个外箱，如果装不满，单独成一箱。<br />
+      3. 一个卡板按 54 件货。你觉得是 13 件，是因为卡板的二维码上限只能装载 13 件的信息。<br />
+      4. 比如这次一共 123 件货，如果内箱装的数量我告诉你是 2，那就有 61.5 也就是 62 个内箱，前 61 个数量为 2，第 62 个为 1，组成 15.5 也就是 16 个外箱，卡板码就是九个多，也就是十个。
+    </div>
+    <div class="msg ai">
+      <div class="who">AI 做了什么</div>
+      内箱、外箱两层按例子对上了：62 个内箱、16 个外箱。卡板码对不齐：按「一张码最多 13 个内箱」应是 5 张，人说的 10 张很像把 123 件 ÷ 13 来算了。于是把两种算法摊开，请人确认卡板码到底按内箱切，还是按件数切，还是先按 54 件分板再切码。
+    </div>
+    <div class="msg you">
+      <div class="who">人这么选</div>
+      按内箱数切：一张码最多 13 个内箱。这次应该是 5 张卡板码（之前说 10 张是口误）。
+    </div>
+    <p class="tip">AI 算错或你口误都没关系。关键是拿出同一道例题，两边对着算。54 件被明确成「仓库堆货」，不再拿去切二维码。</p>
+
+    <h3>4. 把「做完长什么样、谁来用」也问死</h3>
+    <div class="msg you">
+      <div class="who">人确认的三件事</div>
+      生成结果要一张填好的 Excel，格式尽量跟现在这张模板一样，原来的打印软件还能用。<br />
+      一次只做一种物料；供应商、单位这类经常不变的，能记住上次填的。<br />
+      同事自己在电脑上打开，填几项，点生成，得到 Excel。
+    </div>
+    <div class="msg ai">
+      <div class="who">AI 做了什么</div>
+      把整份理解复述一遍（输入项、装箱规则、123 件那个例子、暂时默认序号从 0001 起、连接符仍是 - 和 &amp;），问：可以按这个做了吗？
+    </div>
+    <p class="tip">动手前让 AI「用你的话把理解说回去」。说错的地方此时改，比做完再返工便宜得多。</p>
+
+    <h3>5. 共识已够，直接开做</h3>
+    <div class="msg you">
+      <div class="who">人这么说</div>
+      你直接开做。
+    </div>
+    <div class="msg ai">
+      <div class="who">AI 做了什么</div>
+      做成一个填表窗口：填几项就能生成 Excel，并预告会有多少内箱、外箱、卡板码。用「123 件、每箱 2 件」核对过：62 内箱、16 外箱、5 张卡板码。
+    </div>
+
+    <h3>6. 试过之后，再追问「改数据会不会错」</h3>
+    <div class="msg you">
+      <div class="who">人这么说</div>
+      我试了一下，暂时没有发现问题。你再检查一下代码和逻辑，改动点数据会有问题吗？比如我改料号，二维码那里会变吗？如果没有问题，就打包成双击就能用、不用装 Python 的版本。
+    </div>
+    <div class="msg ai">
+      <div class="who">AI 做了什么</div>
+      核对后说明：改料号、供应商、日期、每箱件数，二维码会变；物料名称本来就不进二维码（原来的模板就是这样）。改总件数会重新算箱数。然后打成大约 16.6 MB 的 exe，放进「发给同事」文件夹。
+    </div>
+    <p class="tip">「我试过了 + 我担心的那一个点 + 下一步要打包」是很好的验收句式。比笼统说「再优化一下」清楚。</p>
+
+    <h3>7. 打包后再让它用成品自检</h3>
+    <div class="msg you">
+      <div class="who">人这么说</div>
+      你检查一遍打包后会不会出现错误。
+    </div>
+    <div class="msg ai">
+      <div class="who">AI 做了什么</div>
+      用打包好的程序真正跑了一遍：换个文件夹启动、生成 Excel、核对 62/16/5、再打开窗口看会不会秒退。结果没有出错。
+    </div>
+    <p class="tip">「打包了」不等于「能用」。让 AI 测的是成品，不是它自己写着的那份草稿。</p>
+
+    <h2>三、含糊说法 vs 这次用过的清楚说法</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>比较含糊</th>
+          <th>这次实际用的</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>帮我做一个整理表格的小程序</td>
+          <td>先读现有 Excel，告诉我你看懂了什么，再提问直到达成共识</td>
+        </tr>
+        <tr>
+          <td>按正常规则装箱</td>
+          <td>4 个内箱一个外箱，装不满单独成一箱；内箱件数由人每次输入</td>
+        </tr>
+        <tr>
+          <td>卡板按 13 或 54 那样切</td>
+          <td>仓库一板 54 件；二维码一张最多拼 13 个内箱；不够 13 也单独一张</td>
+        </tr>
+        <tr>
+          <td>数量多的时候你看着办</td>
+          <td>123 件、每内箱 2 件 → 62 个内箱（最后一箱 1 件）→ 16 个外箱 → 5 张卡板码</td>
+        </tr>
+        <tr>
+          <td>做好就能用</td>
+          <td>同事自己电脑上双击打开；输出要跟现有模板一样，原来的打印方式不改</td>
+        </tr>
+        <tr>
+          <td>再检查一下</td>
+          <td>改料号二维码会变吗？打包后的 exe 能不能真正生成表格、会不会秒退？</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>四、你下次可以照着说的开头</h2>
+    <div class="card">
+      <p>把下面这段里的「××」换成你自己的事即可：</p>
+      <p>
+        「我要给同事做一个小工具，解决××。相关文件在这个文件夹里，你先读，用白话告诉我你看懂了什么。有不清楚的就问我，问到我们达成共识再动手。
+        做成之后，他要能在自己电脑上自己用。验收时请用一个具体例子算给我看，例如……」
+      </p>
+    </div>
+
+    <ol class="steps">
+      <li>先给材料（表格、截图、旧文件），再提要求。</li>
+      <li>规则用自己的话讲，并附带一个带数字的例子。</li>
+      <li>听 AI 复述，错了立刻改，对了再说「开做」。</li>
+      <li>自己试一遍，再点名让它查你最担心的那一个点。</li>
+      <li>如果要给别人用，明确说「谁、在哪台电脑、要不要安装别的软件」。</li>
+    </ol>
+
+    <footer>
+      <p>文件位置：跟这个小工具放在同一个「发给同事」文件夹里。</p>
+      <p>工具本身：双击「益佳通标签生成器.exe」。这份实录只说明「当时是怎么问出来的」，不含编程教程。</p>
+    </footer>
+  </div>
+</body>
+</html>

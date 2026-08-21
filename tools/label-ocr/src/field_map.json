@@ -1,0 +1,60 @@
+{
+  "comment": "标签上的字段名（别名）对应到表格列。换了标签只要字段名能对上就能用；对不上就在这里加别名。",
+  "fields": {
+    "ArtesynPN": {
+      "excel": "X",
+      "aliases": ["物料编码", "物料标码", "雅达料号", "料号", "P/N", "PN"]
+    },
+    "ManufacturerPN": {
+      "excel": "U",
+      "aliases": ["制造商料号", "厂家料号", "MPN"]
+    },
+    "ExpDate": {
+      "excel": "W",
+      "aliases": ["过期日期", "到期日期", "有效期至", "有效期"]
+    },
+    "COO": {
+      "excel": "N",
+      "aliases": ["COO", "C00", "C0O", "CO0", "原产地", "产地"]
+    },
+    "Manufacturer": {
+      "excel": "T",
+      "aliases": ["制造商", "生产厂家", "厂家", "制造商名称"]
+    },
+    "MaterialGroup": {
+      "excel": "Z",
+      "aliases": ["物料组", "物料组别"]
+    },
+    "UnitQty": {
+      "excel": "O",
+      "aliases": ["数量", "Qty", "QTY", "QTY.", "数量(PCS)"]
+    },
+    "DateCode": {
+      "excel": "L",
+      "aliases": ["DC", "D/C", "DateCode", "生产日期/周期", "生产周期"]
+    },
+    "ManufactureDate": {
+      "excel": "K",
+      "aliases": ["生产日期", "制造日期"]
+    },
+    "LotNo": {
+      "excel": "M",
+      "aliases": ["LN", "LOT", "Lot", "LotNo", "批次号", "批次", "LOT NO"]
+    },
+    "CLID": {
+      "excel": "V",
+      "aliases": ["CLID", "标签条形码", "条码"]
+    },
+    "OldAstecPN": {
+      "excel": "Y",
+      "aliases": ["旧雅达料号", "旧料号", "Old AstecPN"]
+    }
+  },
+  "manufacturer_normalize": {
+    "HAINA": "HAI NA",
+    "HAI NA": "HAI NA",
+    "HAI-NA": "HAI NA"
+  },
+  "clid_pattern": "[A-Z]{2,}[A-Z0-9]{10,}",
+  "ignore_barcode_prefixes": ["MO "]
+}

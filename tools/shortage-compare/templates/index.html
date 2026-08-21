@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>欠料对照小程序</title>
+  <style>
+    :root {
+      --ink: #16343d;
+      --paper: #f4efe6;
+      --card: #fffdf8;
+      --line: #d9cfc0;
+      --accent: #c45c26;
+      --teal: #1f4e5f;
+      --ok: #2d6a4f;
+      --warn: #b85c38;
+      --bad: #9b2226;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+      background:
+        radial-gradient(1200px 400px at 10% -10%, #e7d7b8 0%, transparent 50%),
+        var(--paper);
+      color: var(--ink);
+    }
+    header {
+      background: var(--teal);
+      color: #f7f1e8;
+      padding: 28px 20px 24px;
+    }
+    header h1 { margin: 0 0 8px; font-size: 28px; letter-spacing: 0.04em; }
+    header p { margin: 0; opacity: 0.9; font-size: 14px; line-height: 1.6; }
+    main { max-width: 1180px; margin: 0 auto; padding: 24px 16px 64px; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 20px;
+      margin-bottom: 18px;
+      box-shadow: 0 8px 24px rgba(22, 52, 61, 0.06);
+    }
+    h2 { margin: 0 0 14px; font-size: 18px; }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+    label.file {
+      display: block;
+      border: 1px dashed #b9a58a;
+      border-radius: 12px;
+      padding: 16px;
+      background: #fbf7f0;
+      min-height: 140px;
+    }
+    label.file b { display: block; margin-bottom: 6px; }
+    label.file span { display: block; color: #6b5e4e; font-size: 13px; line-height: 1.5; margin-bottom: 12px; }
+    input[type=file] { width: 100%; font-size: 13px; }
+    .actions { display: flex; gap: 12px; margin-top: 16px; flex-wrap: wrap; }
+    button, .btn {
+      appearance: none;
+      border: 0;
+      border-radius: 10px;
+      padding: 12px 18px;
+      font-size: 15px;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-block;
+    }
+    button.primary { background: var(--accent); color: white; font-weight: 700; }
+    .btn.down { background: var(--teal); color: white; font-weight: 700; }
+    .flash {
+      background: #fff3cd;
+      border: 1px solid #e4c56a;
+      color: #6b4f00;
+      padding: 10px 12px;
+      border-radius: 8px;
+      margin-bottom: 14px;
+    }
+    .stats { display: flex; gap: 10px; flex-wrap: wrap; }
+    .stat {
+      background: #f7f1e8;
+      border-radius: 10px;
+      padding: 10px 12px;
+      min-width: 110px;
+    }
+    .stat b { display: block; font-size: 22px; }
+    .stat span { font-size: 12px; color: #6b5e4e; }
+    .legend { font-size: 13px; color: #5c5348; line-height: 1.7; }
+    .chip { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; }
+    .chip.ok { background: #d8f3dc; color: var(--ok); }
+    .chip.bad { background: #f8d7da; color: var(--bad); }
+    .chip.warn { background: #ffe8cc; color: var(--warn); }
+    .chip.mute { background: #e9ecef; color: #495057; }
+    .table-wrap { overflow: auto; max-height: 68vh; border: 1px solid var(--line); border-radius: 10px; }
+    table { border-collapse: collapse; width: 100%; font-size: 13px; }
+    th, td { border-bottom: 1px solid #eee6d8; padding: 8px 10px; text-align: left; vertical-align: top; }
+    th { position: sticky; top: 0; background: #1f4e5f; color: white; white-space: nowrap; }
+    td.note { min-width: 280px; }
+    ol.help { margin: 0; padding-left: 18px; color: #4d453b; line-height: 1.7; }
+    @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>欠料对照小程序</h1>
+    <p>每次上传当次的 Excel。结果表以欠料表为底，自动标出：不够库存、还需生产、还需排产多少。</p>
+  </header>
+  <main>
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        {% for msg in messages %}<div class="flash">{{ msg }}</div>{% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <section class="card">
+      <h2>1. 上传这一次要用的表格</h2>
+      <form action="{{ url_for('do_compare') }}" method="post" enctype="multipart/form-data">
+        <div class="grid">
+          <label class="file">
+            <b>欠料表（必须）</b>
+            <span>底稿。例如「江西奥海欠料.xlsx」。生成结果会保留它原来的列。</span>
+            <input type="file" name="shortage" accept=".xlsx,.xls" required />
+          </label>
+          <label class="file">
+            <b>库存汇总表（必须）</b>
+            <span>用来看成品仓还剩多少。例如「本期库存汇总表」。</span>
+            <input type="file" name="inventory" accept=".xlsx,.xls" required />
+          </label>
+          <label class="file">
+            <b>主生产计划（建议上传）</b>
+            <span>用来算「已经排了多少、还要再排多少」。不传也能先看库存够不够。</span>
+            <input type="file" name="plan" accept=".xlsx,.xls" />
+          </label>
+        </div>
+        <div class="actions">
+          <button class="primary" type="submit">开始比对</button>
+          {% if result %}
+            <a class="btn down" href="{{ url_for('download') }}">下载结果 Excel</a>
+          {% endif %}
+        </div>
+      </form>
+    </section>
+
+    {% if summary %}
+    <section class="card">
+      <h2>2. 这一次比对结果</h2>
+      <div class="stats">
+        <div class="stat"><b>{{ summary['欠料行数'] }}</b><span>欠料行数</span></div>
+        <div class="stat"><b>{{ summary['不够库存'] }}</b><span>不够库存</span></div>
+        <div class="stat"><b>{{ summary['还需生产'] }}</b><span>还需生产</span></div>
+        <div class="stat"><b>{{ summary['还需再排产'] }}</b><span>还需再排产</span></div>
+        <div class="stat"><b>{{ summary['库存足够'] }}</b><span>库存足够</span></div>
+      </div>
+      <p class="legend" style="margin-top:12px">
+        颜色：<span class="chip ok">绿 = 库存足够</span>
+        <span class="chip warn">橙 = 不够库存，但计划里已经排了，还要生产</span>
+        <span class="chip bad">红 = 不够库存，而且还要再排产</span>
+        <span class="chip mute">灰 = 抵扣后已经没有欠料</span>
+      </p>
+    </section>
+
+    <section class="card">
+      <h2>3. 预览（完整内容请下载 Excel）</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              {% for col in columns %}<th>{{ col }}</th>{% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in preview %}
+              {% set judge = row.get('库存判断','') %}
+              {% set prod = row.get('还需生产','') %}
+              {% set plan_qty = row.get('还需排产数量','0') %}
+              <tr>
+                {% for col in columns %}
+                  <td class="{{ 'note' if col == '标注说明' else '' }}">
+                    {% if col == '库存判断' %}
+                      {% if judge == '库存足够' %}<span class="chip ok">{{ judge }}</span>
+                      {% elif judge == '不够库存' %}<span class="chip bad">{{ judge }}</span>
+                      {% else %}<span class="chip mute">{{ judge }}</span>{% endif %}
+                    {% elif col == '还需生产' %}
+                      {% if prod == '是' %}<span class="chip warn">是</span>{% else %}否{% endif %}
+                    {% else %}
+                      {{ row[col] }}
+                    {% endif %}
+                  </td>
+                {% endfor %}
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+    {% endif %}
+
+    <section class="card">
+      <h2>怎么算的（用大白话）</h2>
+      <ol class="help">
+        <li><b>需求数量</b>：看欠料表里的「抵扣后的最终欠料」，取绝对值。这是还要交的数。</li>
+        <li><b>成品库存</b>：在库存表里用物料编码去对「参考客户货号」，只算「成品仓」。不良品不算可交库存。</li>
+        <li><b>不够库存</b>：成品库存 &lt; 需求数量。缺口 = 需求 − 成品库存。</li>
+        <li><b>还需生产</b>：库存不够，就要生产。</li>
+        <li><b>还需排产多少</b>：缺口再减去生产计划里已经投产但还没入库的数量。减完还剩多少，就是还要再排的。</li>
+      </ol>
+    </section>
+  </main>
+</body>
+</html>

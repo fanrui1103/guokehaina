@@ -1,0 +1,5 @@
+rapidocr
+openpyxl
+opencv-python-headless
+pillow
+pyzbar
